@@ -14,6 +14,11 @@ unsigned char game_running = 0;
 unsigned char score = 0;
 
 unsigned int T2 = 0;            // ms counter (Timer2 interrupt)
+unsigned int HIT;
+unsigned int tone_time;
+
+const unsigned int C5 = 9556;   // jump tone
+const unsigned int G3 = 25510;	// game-over tone
 
 const unsigned char MSG0[20] = "   GAME  OVER   ";
 const unsigned char MSG1[20] = "   SCORE:        ";
@@ -135,12 +140,18 @@ unsigned char check_collision() {
 }
 
 void end_game(){
-    LCD_Inst(1);
+    HIT = 1;	// trigger game-over tone in Timer3 Interrupt while writing game over
+	LCD_Inst(1);
     LCD_Move(0,0); 
     unsigned int i; 
     for (i=0; i<20; i++) {
         LCD_Write(MSG0[i]); //display game over
     }
+	
+	HIT = 0;
+	Wait_ms(100);
+    HIT = 1;        // trigger game-over tone in Timer3 Interrupt while writing score
+
     LCD_Move(1,0); 
     unsigned int i; 
     for (i=0; i<20; i++) {
@@ -149,6 +160,7 @@ void end_game(){
     LCD_Move(1,9);
     LCD_Out(score, 3, 0);
     
+	HIT = 0;
 
     game_running = 0;
 
@@ -171,9 +183,22 @@ void interrupt IntServe(void)
         INT1IF = 0;
     }
 
+    if (TMR1IF) {
+        // output start/jump tone when player starts game or jumps (presses RB1)
+        TMR1 = -C5;
+        if (RB1) RC1 = !RC1;
+        TMR1IF = 0;
+    }
+
     if (TMR2IF) {
         T2++;          // count milliseconds
         TMR2IF = 0;
+    }
+
+    if (TMR3IF) {
+        TMR3 = -G3;
+        if (HIT) RC2 = !RC2;
+        TMR3IF = 0;
     }
 }
 
@@ -186,11 +211,27 @@ void main(void)
     TRISE = 0;
     ADCON1 = 0x0F;
 
+    // set up Timer1 for PS = 1
+    TMR1CS = 0;
+    T1CON = 0x81;
+    TMR1ON = 1;
+    TMR1IE = 1;
+    TMR1IP = 1;
+    PEIE = 1;
+
     // Timer2: 1ms overflow
     T2CON = 0x4D;
     PR2 = 249;
     TMR2IE = 1;
     TMR2IP = 1;
+
+    // set up Timer3 for PS = 1
+    TMR3CS = 0;
+    T3CON = 0x81;
+    TMR3ON = 1;
+    TMR3IE = 1;
+    TMR3IP = 1;
+    PEIE = 1;
 
     // Enable INT1 (RB1)
     INT1IE = 1;
@@ -211,6 +252,7 @@ void main(void)
     jump_timer = 0;
     wait_time = 300;
     game_running = 1;
+    HIT = 0;
 
     while(1){
         while(game_running){
