@@ -9,11 +9,13 @@ unsigned char world[WORLD_SIZE];
 unsigned char is_jumping = 0;
 unsigned char jump_timer = 0;
 unsigned int wait_time = 300;   // starting frame delay
+unsigned int time_between_speed_increase = 3000;
 unsigned char last_was_cactus = 0;
 unsigned char game_running = 0;
 unsigned char score = 0;
+unsigned int seconds = 0;
 
-unsigned int T2 = 0;            // ms counter (Timer2 interrupt)
+unsigned long T2 = 0;            // ms counter (Timer2 interrupt)
 unsigned int HIT;
 unsigned int tone_time;
 
@@ -21,7 +23,8 @@ const unsigned int C5 = 9556;   // jump tone
 const unsigned int G3 = 25510;	// game-over tone
 
 const unsigned char MSG0[20] = "   GAME  OVER   ";
-const unsigned char MSG1[20] = "   SCORE:        ";
+const unsigned char MSG1[20] = "SCORE:          ";
+const unsigned char MSG2[20] = "TIME:           ";
 
 
 // Custom characters
@@ -102,6 +105,10 @@ void update_jump() {
 // Draw world to LCD
 void display_world() {
     unsigned char i;
+    seconds = T2 / 100;
+
+    LCD_Move(0,10);
+    LCD_Out(seconds,5,0);
 
     // TOP ROW (Dino only if jumping)
     for(i=0; i<WORLD_SIZE; i++) {
@@ -124,11 +131,10 @@ void display_world() {
 
 // Update speed every 1 second
 void update_speed() {
-    if(T2 >= 3000) {       // 3000 ms = 3 second
-        if(wait_time > 50) // don't go too fast
+    if(T2 >= time_between_speed_increase) {       // 3000 ms = 3 second
+        if(wait_time > 30) // don't go too fast
             wait_time -= 10;
-
-        T2 = 0;            // reset timer
+        time_between_speed_increase = time_between_speed_increase + 3000;
     }
     Wait_ms(wait_time);
 }
@@ -147,22 +153,38 @@ void end_game(){
     for (i=0; i<20; i++) {
         LCD_Write(MSG0[i]); //display game over
     }
-	
-	HIT = 0;
-	Wait_ms(100);
-    HIT = 1;        // trigger game-over tone in Timer3 Interrupt while writing score
 
-    LCD_Move(1,0); 
-    unsigned int i; 
+    HIT = 0;
+	Wait_ms(100);
+
+	HIT = 1;
+    Wait_ms(50);
+    HIT = 0;
+    
+    Wait_ms(1000);
+    LCD_Inst(1);
+    LCD_Move(0,0);
     for (i=0; i<20; i++) {
         LCD_Write(MSG1[i]); //display score
     }
-    LCD_Move(1,9);
-    LCD_Out(score, 3, 0);
+    Wait_ms(100);
+
+    LCD_Move(0,10);
+    LCD_Out(score, 5, 0);
+
+	LCD_Move(1,0);
+    for (i=0; i<20; i++) {
+        LCD_Write(MSG2[i]); //display time
+    }
+
+	Wait_ms(100);
+
+    LCD_Move(1,10);
+    LCD_Out(seconds, 5, 0);
     
 	HIT = 0;
-
     game_running = 0;
+    T2 = 0;
 
     while(!RB0);
 
@@ -248,6 +270,9 @@ void main(void)
     init_world();
     display_world();
 	
+
+
+    T2 = 0;
     is_jumping = 0;
     jump_timer = 0;
     wait_time = 300;
